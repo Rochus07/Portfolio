@@ -294,6 +294,8 @@
             </div>
 
             <form id="contact-form" class="glass p-10 rounded-3xl space-y-6 reveal">
+                <!-- 🍯 Honeypot field — hidden from humans, traps bots -->
+                <input type="text" id="honeypot" name="honeypot" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;opacity:0;pointer-events:none;" aria-hidden="true">
                 <input type="text" name="from_name" placeholder="Your Name" required class="w-full bg-white/5 border border-white/10 p-5 rounded-xl focus:outline-none focus:border-accentBlue text-white transition-all">
                 <input type="email" name="reply_to" placeholder="Email Address" required class="w-full bg-white/5 border border-white/10 p-5 rounded-xl focus:outline-none focus:border-accentBlue text-white transition-all">
                 <textarea name="message" placeholder="Your Message" rows="4" required class="w-full bg-white/5 border border-white/10 p-5 rounded-xl focus:outline-none focus:border-accentBlue text-white transition-all"></textarea>
