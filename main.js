@@ -131,6 +131,47 @@ const contactForm  = document.getElementById('contact-form');
 const statusMsg    = document.getElementById('status');
 const submitBtn    = contactForm.querySelector('button[type="submit"]');
 
+/* RATE LIMITING — max 3 submissions per 10 minutes */
+const RATE_LIMIT    = 3;
+const RATE_WINDOW   = 10 * 60 * 1000; // 10 minutes in ms
+const STORAGE_KEY   = 'contact_submissions';
+
+function getRateData() {
+    try {
+        return JSON.parse(sessionStorage.getItem(STORAGE_KEY)) || { count: 0, windowStart: Date.now() };
+    } catch { return { count: 0, windowStart: Date.now() }; }
+}
+
+function isRateLimited() {
+    const data = getRateData();
+    const now  = Date.now();
+    // Reset window if expired
+    if (now - data.windowStart > RATE_WINDOW) {
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ count: 0, windowStart: now }));
+        return false;
+    }
+    return data.count >= RATE_LIMIT;
+}
+
+function incrementRate() {
+    const data = getRateData();
+    data.count++;
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+/* INPUT SANITIZER — strips HTML tags to prevent XSS via form fields */
+function sanitize(str) {
+    return str.replace(/[<>"'`]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' }[c]));
+}
+
+/* FORM SUBMIT VALIDATION */
+function showStatus(msg, isError = false) {
+    statusMsg.textContent = msg;
+    statusMsg.classList.remove('hidden', 'text-red-400', 'text-accentCyan');
+    statusMsg.classList.add(isError ? 'text-red-400' : 'text-accentCyan');
+    setTimeout(() => statusMsg.classList.add('hidden'), 5000);
+}
+
 contactForm.addEventListener('submit', (e) => {
     e.preventDefault();
 
@@ -140,6 +181,29 @@ contactForm.addEventListener('submit', (e) => {
         console.log("Spambot detected. Submission blocked.");
         contactForm.reset();
         return;
+    }
+
+    // ⏱ Rate limit check
+    if (isRateLimited()) {
+        showStatus('⚠️ Too many submissions. Please wait a few minutes.', true);
+        return;
+    }
+
+    // 🧹 Sanitize inputs before sending
+    const nameField    = contactForm.querySelector('[name="from_name"]');
+    const messageField = contactForm.querySelector('[name="message"]');
+    nameField.value    = sanitize(nameField.value.trim());
+    messageField.value = sanitize(messageField.value.trim());
+
+    // Basic length validation
+    if (nameField.value.length < 2) {
+        showStatus('⚠️ Please enter a valid name.', true); return;
+    }
+    if (messageField.value.length < 10) {
+        showStatus('⚠️ Message is too short.', true); return;
+    }
+    if (messageField.value.length > 2000) {
+        showStatus('⚠️ Message is too long (max 2000 characters).', true); return;
     }
 
     // Show loading state
@@ -152,21 +216,16 @@ contactForm.addEventListener('submit', (e) => {
         contactForm
     )
     .then(() => {
-        statusMsg.textContent = '✅ Message Sent Successfully!';
-        statusMsg.classList.remove('hidden', 'text-red-400');
-        statusMsg.classList.add('text-accentCyan');
+        incrementRate();
+        showStatus('✅ Message Sent Successfully!');
         contactForm.reset();
     })
     .catch((error) => {
         console.error('EmailJS error:', error);
-        statusMsg.textContent = '❌ Failed to send. Please try again.';
-        statusMsg.classList.remove('hidden', 'text-accentCyan');
-        statusMsg.classList.add('text-red-400');
+        showStatus('❌ Failed to send. Please try again.', true);
     })
     .finally(() => {
         submitBtn.disabled    = false;
         submitBtn.textContent = 'Send Message';
-        // Hide status after 5 seconds
-        setTimeout(() => statusMsg.classList.add('hidden'), 5000);
     });
 });
